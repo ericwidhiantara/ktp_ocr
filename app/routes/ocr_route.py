@@ -36,11 +36,23 @@ async def ocr_ktp(image: UploadFile = File(..., description="KTP image file")):
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
 
         # Check if image is a KTP using CNN
+        # Special handling for grayscale: CNN model is color-trained and might reject grayscale KTPs.
+        # We check saturation to determine if we should allow a bypass.
         await image.seek(0)
         pil_image = Image.open(image.file)
-        # Ensure PIL image is RGB (grayscale/RGBA images would break the CNN model)
         pil_image = pil_image.convert("RGB")
-        is_ktp = CnnService.is_ktp(pil_image)
+        
+        # Calculate saturation to detect grayscale
+        cv_image_hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
+        avg_saturation = np.mean(cv_image_hsv[:, :, 1])
+        
+        is_ktp = True
+        # If saturation is high enough, we trust the CNN model
+        if avg_saturation > 5:
+            is_ktp = CnnService.is_ktp(pil_image)
+            print(f"[OCR Debug] Color image detected (Sat: {avg_saturation:.2f}). CNN classification: {is_ktp}")
+        else:
+            print(f"[OCR Debug] Grayscale/Low-sat image detected (Sat: {avg_saturation:.2f}). Bypassing CNN check.")
 
         if not is_ktp:
             return JSONResponse(

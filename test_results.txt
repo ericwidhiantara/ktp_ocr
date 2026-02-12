@@ -41,7 +41,7 @@ Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/2.j
 Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/3.jpeg
 {
     "nik": "5108040909980001",
-    "nama": "KOMANG ERIC W ANTARA",
+    "nama": "KOMANG ERIC WIDHI ANTARA",
     "tempat_lahir": "PEDAWA",
     "tgl_lahir": "09-09-1998",
     "jenis_kelamin": "LAKI-LAKI",
@@ -81,7 +81,7 @@ Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/4.w
 Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/5.webp
 {
     "nik": "2171909292740029",
-    "nama": "HANDOKO",
+    "nama": "HANDOKO P O",
     "tempat_lahir": "BANJARMASIN",
     "tgl_lahir": "12-12-1974",
     "jenis_kelamin": "LAKI-LAKI",

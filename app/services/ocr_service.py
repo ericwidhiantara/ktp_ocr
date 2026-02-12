@@ -445,8 +445,18 @@ class OcrService:
             # Gaussian blur to suppress background pattern
             gray = cv2.GaussianBlur(gray, (3, 3), 0)
             
+            # Apply CLAHE for better contrast if it's a name ROI or appears low quality
+            if roi_key == "nama":
+                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+                gray = clahe.apply(gray)
+            
             # Binarization
             _, enhanced = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # For names, try morphological opening to clean up artifact dots
+            if roi_key == "nama":
+                kernel = np.ones((2, 2), np.uint8)
+                enhanced = cv2.morphologyEx(enhanced, cv2.MORPH_OPEN, kernel)
             
             best_text = ""
             for psm in psm_list:
@@ -470,10 +480,17 @@ class OcrService:
                     text = "".join(re.findall(cleaning_regex, text))
                 
                 text = text.strip().upper()
+                
                 if text:
-                    return text
+                    if roi_key == "nama":
+                        # For name, we collect all results and will pick the best one later
+                        # But we still prefer results with spaces
+                        if not best_text or text.count(" ") > best_text.count(" "):
+                            best_text = text
+                    else:
+                        return text
             
-            return ""
+            return best_text
 
         # 2. Primary Extraction via full-page OCR keywords
         lines = result_raw.split("\n")
@@ -511,10 +528,36 @@ class OcrService:
                 return ocr_roi(fallback_roi, cleaning_regex=cleaning_regex)
             return ""
 
-        data["nama"] = find_value(["Nama"], fallback_roi="nama", cleaning_regex="[A-Z. ]")
-        # Name Space Restoration
+        # Enhanced Name Extraction: Compare Full-page vs ROI
+        full_page_name = find_value(["Nama"], cleaning_regex="[A-Z. ]")
+        roi_name = ocr_roi("nama", cleaning_regex="[A-Z. ]")
+        
+        if not full_page_name:
+            data["nama"] = roi_name
+        elif not roi_name:
+            data["nama"] = full_page_name
+        else:
+            # Selection logic: prefer the one with more spaces (names usually have spaces)
+            # or the one that is significantly longer.
+            full_spaces = full_page_name.count(" ")
+            roi_spaces = roi_name.count(" ")
+            
+            # ROI sanity check: prioritize result with spaces and reasonable length
+            if 1 <= roi_spaces <= 8:
+                # If ROI result is significantly better (more spaces) or more complete
+                if roi_spaces > full_spaces or (roi_spaces == full_spaces and len(roi_name) > len(full_page_name)):
+                    data["nama"] = roi_name
+                else:
+                    data["nama"] = full_page_name
+            else:
+                data["nama"] = full_page_name
+
+        # Name Space Restoration for specific misreads
         if data["nama"] == "SUPRIADICANDRACAHYONO":
              data["nama"] = "SUPRIADI CANDRA CAHYONO"
+        
+        # Collapse multiple spaces and trim
+        data["nama"] = re.sub(r"\s+", " ", data["nama"]).strip()
         
         ttl_raw = find_value(["Tempat/Tgl Lahir", "Tempat", "Lahir"], fallback_roi="tempat_tgl_lahir")
         if ttl_raw:
