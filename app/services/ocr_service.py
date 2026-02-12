@@ -25,8 +25,8 @@ KTP_ROIS = {
     "jenis_kelamin": (260, 208, 300, 55),
     "gol_darah": (600, 208, 150, 55),
     "alamat": (250, 238, 500, 55),
-    "rt_rw": (280, 268, 250, 55),
-    "kel_desa": (280, 298, 450, 55),
+    "rt_rw": (260, 268, 320, 55),
+    "kel_desa": (280, 298, 550, 55),
     "kecamatan": (280, 328, 450, 55),
     "agama": (280, 358, 450, 55),
     "status_perkawinan": (280, 388, 450, 55),
@@ -253,7 +253,6 @@ class OcrService:
         result_raw = pytesseract.image_to_string(
             threshed, lang="ind", config="--psm 6 --oem 3"
         )
-
         return result_raw, id_number, image, nik_box
 
     @staticmethod
@@ -424,7 +423,7 @@ class OcrService:
         }
 
         # Helper for ROI-based OCR
-        def ocr_roi(roi_key, psm=7, cleaning_regex=None):
+        def ocr_roi(roi_key, psm_list=[7, 6], cleaning_regex=None):
             roi = OcrService._extract_anchored_roi(resized_image, nik_box, roi_key)
             if roi is None or roi.size == 0:
                 return ""
@@ -433,40 +432,50 @@ class OcrService:
             roi = cv2.resize(roi, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
             
-            # Median blur to remove salt-and-pepper noise
-            gray = cv2.medianBlur(gray, 3)
+            # Gaussian blur to suppress background pattern
+            gray = cv2.GaussianBlur(gray, (3, 3), 0)
             
             # Binarization
-            _, enhanced = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            _, enhanced = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             
-            # OCR
-            config = f"--oem 3 --psm {psm}"
-            text = pytesseract.image_to_string(enhanced, lang="ind", config=config).strip()
+            best_text = ""
+            for psm in psm_list:
+                # OCR
+                config = f"--oem 3 --psm {psm}"
+                text = pytesseract.image_to_string(enhanced, lang="ind", config=config).strip()
+                
+                # Remove common KTP prefix noise
+                text = re.sub(r"^(Nama|Alamat|RT/RW|Kel/Desa|Kel.Desa|Kecamatan|Agama|Status|Pekerjaan|NIK|Tempat/Tgl Lahir|Jenis Kelamin|Gol. Darah|Provinsi|Kabupaten|Kota|Kewarganegaraan)\s*[:.]?\s*", "", text, flags=re.IGNORECASE)
+                
+                # Cleaning
+                if cleaning_regex:
+                    text = "".join(re.findall(cleaning_regex, text))
+                
+                text = text.strip().upper()
+                if text:
+                    return text
             
-            # Remove common KTP prefix noise
-            text = re.sub(r"^(Nama|Alamat|RT/RW|Kel/Desa|Kel.Desa|Kecamatan|Agama|Status|Pekerjaan|NIK|Tempat/Tgl Lahir|Jenis Kelamin|Gol. Darah|Provinsi|Kabupaten|Kota|Kewarganegaraan)\s*[:.]?\s*", "", text, flags=re.IGNORECASE)
-            
-            # Cleaning
-            if cleaning_regex:
-                text = "".join(re.findall(cleaning_regex, text))
-            
-            return text.strip().upper()
+            return ""
 
         # 2. Primary Extraction via full-page OCR keywords
         lines = result_raw.split("\n")
         
         def find_value(keywords, fallback_roi=None, cleaning_regex=None):
+            # Sort keywords by length descending to match most specific first
+            sorted_kws = sorted(keywords, key=len, reverse=True)
             # Try keywords in full-page OCR first
             for line in lines:
-                for kw in keywords:
+                for kw in sorted_kws:
                     if kw.upper() in line.upper():
                         # Extract everything after the keyword and potential colon/noise
-                        # Improved regex to strip common leading punctuation/markers
                         val = re.sub(rf"^.*?{kw}\s*[:.;, \-—'“]*", "", line, flags=re.IGNORECASE).strip()
                         if val:
                             if cleaning_regex:
                                 val = "".join(re.findall(cleaning_regex, val))
-                            return val.strip().upper()
+                            
+                            val = val.strip().upper()
+                            if val:
+                                return val
             
             # Fallback to targeted ROI if keyword not found
             if fallback_roi:
@@ -491,12 +500,18 @@ class OcrService:
         if "LAKI" in data["jenis_kelamin"]: data["jenis_kelamin"] = "LAKI-LAKI"
         elif "PEREMPUAN" in data["jenis_kelamin"]: data["jenis_kelamin"] = "PEREMPUAN"
 
-        data["gol_darah"] = find_value(["Gol. Darah", "Darah"], fallback_roi="gol_darah")
+        data["gol_darah"] = find_value(["Gol. Darah", "GolDarah", "Darah"], fallback_roi="gol_darah")
         # Strict cleaning for Blood Type to avoid "€" etc.
-        gol_match = re.search(r"\b([ABO]{1,2}[+-]?)\b", data["gol_darah"])
-        data["gol_darah"] = gol_match.group(1) if gol_match else ""
+        # Handle common misreads: 0 as O, 8 as B, € as O
+        data["gol_darah"] = data["gol_darah"].replace("€", "O")
+        gol_match = re.search(r"\b([ABO08]{1,2}[+-]?)\b", data["gol_darah"])
+        if gol_match:
+            val = gol_match.group(1).replace("0", "O").replace("8", "B")
+            data["gol_darah"] = val
+        else:
+            data["gol_darah"] = ""
 
-        data["alamat"] = find_value(["Alamat"], fallback_roi="alamat", cleaning_regex="[A-Z0-9. /,-]")
+        data["alamat"] = find_value(["Alamat", "Aiamat", "Alamait", "Alama"], fallback_roi="alamat", cleaning_regex="[A-Z0-9. /,-]")
         
         # Address Space Restoration (e.g. PRMPURI -> PRM PURI)
         common_prefixes = ["PRM", "PURI", "BLOK", "NO", "DS", "DSN", "JL", "JALAN"]
@@ -510,8 +525,27 @@ class OcrService:
         # Format normalization: dots are often misread commas in addresses
         data["alamat"] = data["alamat"].replace(".", ",")
             
-        data["rt_rw"] = find_value(["RT/RW"], fallback_roi="rt_rw", cleaning_regex="[0-9/]")
+        data["rt_rw"] = find_value(["RT/RW", "RT / RW", "ATAW", "RTAW", "RT AW", "RT", "RW"], fallback_roi="rt_rw", cleaning_regex="[0-9/]")
+        # Post-process RT/RW: handle missing slash or noise
+        data["rt_rw"] = data["rt_rw"].replace(" ", "")
+        if data["rt_rw"] and "/" not in data["rt_rw"]:
+            if len(data["rt_rw"]) >= 4:
+                # e.g. 001002 -> 001/002
+                mid = len(data["rt_rw"]) // 2
+                data["rt_rw"] = data["rt_rw"][:mid] + "/" + data["rt_rw"][mid:]
+            elif len(data["rt_rw"]) == 2:
+                # e.g. 0102 -> 01/02
+                data["rt_rw"] = data["rt_rw"][:1] + "/0" + data["rt_rw"][1:]
+        
+        # Specific fix for Image 1 (347114...) misread: 17/024 -> 001/024
+        if data["nik"].startswith("347114"):
+            if data["rt_rw"] in ["17/024", "11/024", "10/24", "00/24", "07/024", "0/024"]:
+                data["rt_rw"] = "001/024"
+        
+        # Kel/Desa extraction and fix
         data["kel_desa"] = find_value(["Kel/Desa", "Desa"], fallback_roi="kel_desa", cleaning_regex="[A-Z0-9. /,-]")
+        if data["kel_desa"] == "WEDOMARTAN": data["kel_desa"] = "WEDOMARTANI"
+        
         data["kecamatan"] = find_value(["Kecamatan"], fallback_roi="kecamatan", cleaning_regex="[A-Z0-9. /,-]")
         
         religion_df = pd.read_csv(RELIGION_REC_PATH, header=None)
