@@ -3,6 +3,8 @@ import time
 import cv2
 import numpy as np
 from fastapi import APIRouter, UploadFile, File
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from PIL import Image
 
 from app.models.schemas import BaseResp, Meta, OcrResultSchema, AlamatSchema
@@ -41,11 +43,16 @@ async def ocr_ktp(image: UploadFile = File(..., description="KTP image file")):
         is_ktp = CnnService.is_ktp(pil_image)
 
         if not is_ktp:
-            return BaseResp(
-                meta=Meta(
-                    code=400,
-                    message="Foto yang diunggah haruslah foto E-KTP",
-                    error=True,
+            return JSONResponse(
+                status_code=400,
+                content=jsonable_encoder(
+                    BaseResp(
+                        meta=Meta(
+                            code=400,
+                            message="Foto yang diunggah haruslah foto E-KTP",
+                            error=True,
+                        ),
+                    )
                 ),
             )
 
@@ -63,12 +70,16 @@ async def ocr_ktp(image: UploadFile = File(..., description="KTP image file")):
 
         # Validate required fields
         if not nik or not nama or not provinsi or not kabupaten:
-            response.status_code = 400
-            return BaseResp(
-                meta=Meta(
-                    code=400,
-                    message="Resolusi foto terlalu rendah, silakan coba lagi.",
-                    error=True,
+            return JSONResponse(
+                status_code=400,
+                content=jsonable_encoder(
+                    BaseResp(
+                        meta=Meta(
+                            code=400,
+                            message="Resolusi foto terlalu rendah, silakan coba lagi.",
+                            error=True,
+                        ),
+                    )
                 ),
             )
 
@@ -102,11 +113,16 @@ async def ocr_ktp(image: UploadFile = File(..., description="KTP image file")):
         )
 
     except Exception as e:
-        print(e)
-        return BaseResp(
-            meta=Meta(
-                code=500,
-                message="Maaf, KTP tidak terdeteksi",
-                error=True,
+        print(f"Error processing KTP: {e}")
+        return JSONResponse(
+            status_code=500,
+            content=jsonable_encoder(
+                BaseResp(
+                    meta=Meta(
+                        code=500,
+                        message="Maaf, KTP tidak terdeteksi",
+                        error=True,
+                    ),
+                )
             ),
         )
