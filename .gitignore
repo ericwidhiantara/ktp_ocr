@@ -1,0 +1,5 @@
+data/cnn/
+venv/
+__pycache__/
+.env
+logs/
