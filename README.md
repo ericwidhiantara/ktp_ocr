@@ -68,7 +68,7 @@ Interactive documentation is available at:
 
 ### OCR Endpoint
 
-**POST** `/api/ocr/`
+**POST** `/api/ocr`
 
 - **Request**: `multipart/form-data`
     - `image`: The KTP image file (JPG, PNG).

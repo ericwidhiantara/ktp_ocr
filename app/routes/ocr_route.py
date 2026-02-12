@@ -13,7 +13,7 @@ router = APIRouter(prefix="/ocr", tags=["OCR"])
 
 
 @router.post(
-    "/",
+    "",
     summary="OCR KTP",
     description="Upload a KTP image to extract identity data via OCR",
 )
@@ -63,6 +63,7 @@ async def ocr_ktp(image: UploadFile = File(..., description="KTP image file")):
 
         # Validate required fields
         if not nik or not nama or not provinsi or not kabupaten:
+            response.status_code = 400
             return BaseResp(
                 meta=Meta(
                     code=400,
