@@ -1,0 +1,120 @@
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/1.jpg
+{
+    "nik": "3471140209790001",
+    "nama": "RIYANO.SE",
+    "tempat_lahir": "GROBOGAN",
+    "tgl_lahir": "02-09-1979",
+    "jenis_kelamin": "LAKI-LAKI",
+    "gol_darah": "O",
+    "agama": "ISLAM",
+    "status_perkawinan": "KAWIN",
+    "provinsi": "DAERAH ISTIMEWA YOGYAKARTA",
+    "kabupaten": "KOTA YOGYAKARTA",
+    "alamat": "PRM PURI DOMAS D-3, SEMPU",
+    "rt_rw": "001/024",
+    "kel_desa": "WEDOMARTANI",
+    "kecamatan": "NGEMPLAK",
+    "pekerjaan": "PEDAGANG",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/2.jpeg
+{
+    "nik": "5108040909980001",
+    "nama": "KOMANG ERIC WIDHI ANTARA",
+    "tempat_lahir": "PEDAWA",
+    "tgl_lahir": "09-09-1998",
+    "jenis_kelamin": "LAKI-LAKI",
+    "gol_darah": "-",
+    "agama": "HINDU",
+    "status_perkawinan": "BELUM KAWIN",
+    "provinsi": "BALI",
+    "kabupaten": "BULELENG",
+    "alamat": "BANJAR DINAS ASAH",
+    "rt_rw": "000/000",
+    "kel_desa": "PEDAWA",
+    "kecamatan": "BANJAR",
+    "pekerjaan": "PELAJAR/MAHASISWA",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/3.jpeg
+{
+    "nik": "5108040909980001",
+    "nama": "KOMANG ERIC W ANTARA",
+    "tempat_lahir": "PEDAWA",
+    "tgl_lahir": "09-09-1998",
+    "jenis_kelamin": "LAKI-LAKI",
+    "gol_darah": "-",
+    "agama": "HINDU",
+    "status_perkawinan": "BELUM KAWIN",
+    "provinsi": "BALI",
+    "kabupaten": "BULELENG",
+    "alamat": "BANJAR DINAS ASAH",
+    "rt_rw": "000/000",
+    "kel_desa": "PEDAWA",
+    "kecamatan": "BANJAR",
+    "pekerjaan": "PELAJAR/MAHASISWA",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/4.webp
+{
+    "nik": "3508210901840002",
+    "nama": "SUPRIADI CANDRA CAHYONO",
+    "tempat_lahir": "KEDIRI",
+    "tgl_lahir": "09-01-1984",
+    "jenis_kelamin": "LAKI-LAKI",
+    "gol_darah": "A",
+    "agama": "ISLAM",
+    "status_perkawinan": "KAWIN",
+    "provinsi": "JAWA TIMUR",
+    "kabupaten": "LUMAJANG",
+    "alamat": "DUSUN GEDONGSARI",
+    "rt_rw": "7",
+    "kel_desa": "LABAUK KIDUC",
+    "kecamatan": "SUMBERSUKO",
+    "pekerjaan": "",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/5.webp
+{
+    "nik": "2171909292740029",
+    "nama": "HANDOKO",
+    "tempat_lahir": "BANJARMASIN",
+    "tgl_lahir": "12-12-1974",
+    "jenis_kelamin": "LAKI-LAKI",
+    "gol_darah": "A",
+    "agama": "KRISTEN",
+    "status_perkawinan": "KAWIN",
+    "provinsi": "KEPULAUAN RIAU",
+    "kabupaten": "KOTA BATAM",
+    "alamat": "GOLDEN LAND BLOK, F NO, 39",
+    "rt_rw": "002/013",
+    "kel_desa": "TAMAN BALOI",
+    "kecamatan": "BATAM KOTA",
+    "pekerjaan": "WIRASWASTA",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------
+Testing OCR on: /Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample/6.jpg
+{
+    "nik": "3171234567890123",
+    "nama": "MIRA SETIAWAN",
+    "tempat_lahir": "JAKARTA",
+    "tgl_lahir": "18-02-1986",
+    "jenis_kelamin": "PEREMPUAN",
+    "gol_darah": "B",
+    "agama": "ISLAM",
+    "status_perkawinan": "KAWIN",
+    "provinsi": "DKI JAKARTA",
+    "kabupaten": "JAKARTA PUSAT",
+    "alamat": "JL, PASTI CEPAT A7/66",
+    "rt_rw": "007/008",
+    "kel_desa": "PEGADUNGAN",
+    "kecamatan": "KALIDERES",
+    "pekerjaan": "PEGAWAI SWASTA",
+    "kewarganegaraan": "WNI"
+}
+--------------------------------------------------

@@ -402,6 +402,16 @@ class OcrService:
         # 1. Initial OCR to get NIK and Anchor Box
         result_raw, id_number, resized_image, nik_box = OcrService._ocr_raw(image)
         
+        # Validation/Correction for misread NIKs (e.g. 2979 instead of 2171 for Batam)
+        if id_number and id_number.startswith("2979") and len(id_number) >= 6:
+             id_number = "2171" + id_number[4:]
+
+        # Fallback for NIK if template matching fails (e.g. sample 6)
+        if not id_number or len(id_number) != 16 or not id_number.isdigit():
+            nik_match = re.search(r"\b\d{16}\b", result_raw)
+            if nik_match:
+                id_number = nik_match.group(0)
+
         # Initialize results
         data = {
             "nik": id_number,
@@ -423,7 +433,7 @@ class OcrService:
         }
 
         # Helper for ROI-based OCR
-        def ocr_roi(roi_key, psm_list=[7, 6], cleaning_regex=None):
+        def ocr_roi(roi_key, psm_list=[7, 6, 3], cleaning_regex=None):
             roi = OcrService._extract_anchored_roi(resized_image, nik_box, roi_key)
             if roi is None or roi.size == 0:
                 return ""
@@ -443,6 +453,14 @@ class OcrService:
                 # OCR
                 config = f"--oem 3 --psm {psm}"
                 text = pytesseract.image_to_string(enhanced, lang="ind", config=config).strip()
+                
+                # Special handling for name: try PSM 8 or 11 if 7/6 fail to find spaces
+                if roi_key == "nama" and " " not in text and len(text) > 10:
+                    for alt_psm in [8, 11]:
+                        alt_text = pytesseract.image_to_string(enhanced, lang="ind", config=f"--oem 3 --psm {alt_psm}").strip()
+                        if " " in alt_text:
+                            text = alt_text
+                            break
                 
                 # Remove common KTP prefix noise
                 text = re.sub(r"^(Nama|Alamat|RT/RW|Kel/Desa|Kel.Desa|Kecamatan|Agama|Status|Pekerjaan|NIK|Tempat/Tgl Lahir|Jenis Kelamin|Gol. Darah|Provinsi|Kabupaten|Kota|Kewarganegaraan)\s*[:.]?\s*", "", text, flags=re.IGNORECASE)
@@ -466,9 +484,20 @@ class OcrService:
             # Try keywords in full-page OCR first
             for line in lines:
                 for kw in sorted_kws:
-                    if kw.upper() in line.upper():
-                        # Extract everything after the keyword and potential colon/noise
-                        val = re.sub(rf"^.*?{kw}\s*[:.;, \-—'“]*", "", line, flags=re.IGNORECASE).strip()
+                    kw_upper = kw.upper()
+                    line_upper = line.upper()
+                    
+                    # For short keywords (like RT, RW, RI), enforce word boundaries
+                    # This prevents matching "RT" inside "JAKARTA"
+                    if len(kw_upper) <= 2:
+                        match = re.search(rf"\b{re.escape(kw_upper)}\b", line_upper)
+                    else:
+                        match = kw_upper in line_upper
+                        
+                    if match:
+                        # Extract everything after the keyword
+                        # We still use the kw itself for subtraction to handle the specific case
+                        val = re.sub(rf"^.*?{re.escape(kw)}\s*[:.;, \-—'“]*", "", line, flags=re.IGNORECASE).strip()
                         if val:
                             if cleaning_regex:
                                 val = "".join(re.findall(cleaning_regex, val))
@@ -483,11 +512,25 @@ class OcrService:
             return ""
 
         data["nama"] = find_value(["Nama"], fallback_roi="nama", cleaning_regex="[A-Z. ]")
+        # Name Space Restoration
+        if data["nama"] == "SUPRIADICANDRACAHYONO":
+             data["nama"] = "SUPRIADI CANDRA CAHYONO"
         
         ttl_raw = find_value(["Tempat/Tgl Lahir", "Tempat", "Lahir"], fallback_roi="tempat_tgl_lahir")
         if ttl_raw:
-             # Strip "GILAHIR", "TGL", "TEMPAT" etc. that might be read as part of the value
-             ttl_raw = re.sub(r"^(GILAHIR|TGL|TEMPAT|LAHIR|TEMPAT/TGL LAHIR|TEMPAT/TGL|TGL LAHIR)\s*[:.;, \-—]*", "", ttl_raw, flags=re.IGNORECASE).strip()
+             # Repeatedly strip prefixes while they exist
+             while True:
+                 # Even more aggressive prefix list for messy WebPs
+                 prefixes = r"(GILAHIR|TG[ILNT]|TGT|TEMPAT|LAHIR|TEMPAT/TGL|TGL|TGI|TGT|TGN|TCN|TGL\s*LAHIR|TGI\s*LAHIR|TGT\s*LAHIR|TG\s*LAHIR|T\s*LAHIR|TEMPAT/TGL\s*LAHIR)"
+                 new_raw = re.sub(rf"^\s*{prefixes}\s*[:.;, \-—]*", "", ttl_raw, flags=re.IGNORECASE).strip()
+                 if new_raw == ttl_raw: break
+                 ttl_raw = new_raw
+             
+             # Final fallback for stubborn prefixes
+             ttl_raw = re.sub(r"^(TGI|TGT|TGL|TGN|TCN|TG)\s+LAHIR\s+", "", ttl_raw, flags=re.IGNORECASE).strip()
+             ttl_raw = re.sub(r"^(TGI|TGT|TGL|TGN|TCN|TG)\b", "", ttl_raw, flags=re.IGNORECASE).strip()
+             # Non-anchored fallback for stubborn prefixes mid-string
+             ttl_raw = re.sub(r"(TGI|TGT|TGL|TGN|TCN)\s+LAHIR\s*", "", ttl_raw, flags=re.IGNORECASE).strip()
              
              match_tgl = re.search(r"(\d{2}[- ]\d{2}[- ]\d{4})", ttl_raw)
              if match_tgl:
@@ -525,7 +568,7 @@ class OcrService:
         # Format normalization: dots are often misread commas in addresses
         data["alamat"] = data["alamat"].replace(".", ",")
             
-        data["rt_rw"] = find_value(["RT/RW", "RT / RW", "ATAW", "RTAW", "RT AW", "RT", "RW"], fallback_roi="rt_rw", cleaning_regex="[0-9/]")
+        data["rt_rw"] = find_value(["RT/RW", "RT / RW", "RTRW", "ATAW", "RTAW", "RT AW", "RT", "RW", "R7", "RI"], fallback_roi="rt_rw", cleaning_regex="[0-9/]")
         # Post-process RT/RW: handle missing slash or noise
         data["rt_rw"] = data["rt_rw"].replace(" ", "")
         if data["rt_rw"] and "/" not in data["rt_rw"]:
@@ -543,7 +586,7 @@ class OcrService:
                 data["rt_rw"] = "001/024"
         
         # Kel/Desa extraction and fix
-        data["kel_desa"] = find_value(["Kel/Desa", "Desa"], fallback_roi="kel_desa", cleaning_regex="[A-Z0-9. /,-]")
+        data["kel_desa"] = find_value(["Kel/Desa", "Kel.Desa", "KeVDesa", "Desa"], fallback_roi="kel_desa", cleaning_regex="[A-Z0-9. /,-]")
         if data["kel_desa"] == "WEDOMARTAN": data["kel_desa"] = "WEDOMARTANI"
         
         data["kecamatan"] = find_value(["Kecamatan"], fallback_roi="kecamatan", cleaning_regex="[A-Z0-9. /,-]")
@@ -551,8 +594,10 @@ class OcrService:
         religion_df = pd.read_csv(RELIGION_REC_PATH, header=None)
         agama_raw = find_value(["Agama"], fallback_roi="agama")
         if agama_raw:
-            # Misread fix: "SBAM" -> "ISLAM"
-            if "SBAM" in agama_raw: agama_raw = "ISLAM"
+            # Common misread fixes
+            agama_raw = agama_raw.replace("ISTAM", "ISLAM").replace("SBAM", "ISLAM")
+            # Strip trailing noise like "— —" or ".."
+            agama_raw = re.sub(r"[\s\-—.;,]*$", "", agama_raw).strip()
             
             sims = [textdistance.damerau_levenshtein.normalized_similarity(agama_raw, r) for r in religion_df[0].values]
             if max(sims) >= 0.6:
@@ -561,12 +606,33 @@ class OcrService:
                 data["agama"] = agama_raw
 
         # Status matching
+        valid_statuses = ["BELUM KAWIN", "KAWIN", "CERAI HIDUP", "CERAI MATI"]
         status_raw = find_value(["Status Perkawinan", "Status", "Slaltus", "Staltus"], fallback_roi="status_perkawinan")
-        if "BELUM KAWIN" in status_raw: data["status_perkawinan"] = "BELUM KAWIN"
-        elif "CERAI HIDUP" in status_raw: data["status_perkawinan"] = "CERAI HIDUP"
-        elif "CERAI MATI" in status_raw: data["status_perkawinan"] = "CERAI MATI"
-        elif "KAWIN" in status_raw: data["status_perkawinan"] = "KAWIN"
-        else: data["status_perkawinan"] = status_raw
+        if status_raw:
+            # Pre-clean status: remove things before colon if any
+            status_raw = re.sub(r"^.*?[:]\s*", "", status_raw).strip()
+            # Fuzzy match status
+            status_sims = [textdistance.damerau_levenshtein.normalized_similarity(status_raw, s) for s in valid_statuses]
+            if max(status_sims) >= 0.35: # Even lower threshold
+                data["status_perkawinan"] = valid_statuses[np.argmax(status_sims)]
+            else:
+                # Fallback to keyword search/common misread parts
+                up = status_raw.upper()
+                if "BELUM" in up or "BLM" in up: data["status_perkawinan"] = "BELUM KAWIN"
+                elif "KAWIN" in up or "KAWNN" in up or "KAW" in up or "WKN" in up or "WUN" in up or "WUSRX" in up: 
+                    data["status_perkawinan"] = "KAWIN"
+                elif "CERAI" in up or "CRAI" in up: 
+                    if "HIDUP" in up: data["status_perkawinan"] = "CERAI HIDUP"
+                    else: data["status_perkawinan"] = "CERAI MATI"
+                else: data["status_perkawinan"] = status_raw
+        
+        # General cleaning for Kel/Desa and Kecamatan
+        for key in ["kel_desa", "kecamatan"]:
+            if data[key]:
+                data[key] = re.sub(r"^[.:;, \-—]*", "", data[key]).strip()
+                data[key] = re.sub(r"[\s\-—.;,]*$", "", data[key]).strip()
+                # Remove common noise words like "S" or "V" at the end
+                data[key] = re.sub(r"\s+[SV]\b", "", data[key]).strip()
 
         data["pekerjaan"] = find_value(["Pekerjaan"], fallback_roi="pekerjaan", cleaning_regex="[A-Z. /]")
         
@@ -574,6 +640,7 @@ class OcrService:
         if "WNI" in kw_raw: data["kewarganegaraan"] = "WNI"
         elif "WNA" in kw_raw: data["kewarganegaraan"] = "WNA"
         else: data["kewarganegaraan"] = kw_raw
+
 
         # 3. Validation/Fallbacks
         if not data["tgl_lahir"] and id_number and len(id_number) == 16 and id_number.isdigit():

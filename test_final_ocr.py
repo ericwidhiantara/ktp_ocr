@@ -33,7 +33,7 @@ def test_ocr(image_path):
 
 if __name__ == "__main__":
     sample_dir = "/Users/eric/Documents/Project/python/rnd/ktp_ocr/test/sample"
-    images = [f for f in os.listdir(sample_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    images = [f for f in os.listdir(sample_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
     
     for img_name in sorted(images):
         img_path = os.path.join(sample_dir, img_name)
